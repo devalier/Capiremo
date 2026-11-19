@@ -10,7 +10,13 @@ export interface Contact {
   /** data: URL of a photo set by the caregiver; null shows initials. */
   photo: string | null;
   order: number;
+  /** E.164 number, e.g. "+393331234567". Null until someone sets it on the keypad screen. */
+  phone: string | null;
+  /** Country last used on the keypad for this contact (ISO code). */
+  country: string | null;
 }
+
+export const MAX_CONTACTS = 4;
 
 export const SPEAKER_ID: UserId = 'me';
 

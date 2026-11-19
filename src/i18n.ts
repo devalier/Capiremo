@@ -60,6 +60,10 @@ const strings = {
   today: { en: 'Today', it: 'Oggi' },
   yesterday: { en: 'Yesterday', it: 'Ieri' },
   seconds: { en: '{n} seconds', it: '{n} secondi' },
+  phoneFor: { en: 'Phone number for {name}', it: 'Numero di telefono di {name}' },
+  chooseCountry: { en: 'Choose country', it: 'Scegli il paese' },
+  save: { en: 'SAVE', it: 'SALVA' },
+  deleteDigit: { en: 'Delete last digit', it: 'Cancella ultima cifra' },
 } as const;
 
 export type StringKey = keyof typeof strings;

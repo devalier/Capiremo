@@ -13,9 +13,20 @@ export interface Settings {
 
 export const defaultSettings: Settings = { labels: 'en', sounds: true, speak: false, forceDemoAudio: false };
 
+const contact = (id: string, name: string, order: number): Contact => ({
+  id,
+  name,
+  photo: null,
+  order,
+  phone: null,
+  country: null,
+});
+
 export const defaultContacts: Contact[] = [
-  { id: 'paul', name: 'Paul', photo: null, order: 0 },
-  { id: 'stefania', name: 'Stefania', photo: null, order: 1 },
+  contact('paul', 'Paul', 0),
+  contact('francesca', 'Francesca', 1),
+  contact('izumi', 'Izumi', 2),
+  contact('dan', 'Dan', 3),
 ];
 
 export type DraftSlot = 'current' | 'discarded';
@@ -128,10 +139,10 @@ export function indexedDbStore(): Store {
       await kvPut('settings', s);
     },
     async getContacts() {
-      return (await kvGet<Contact[]>('contacts')) ?? defaultContacts;
+      return (await kvGet<Contact[]>('contacts:v2')) ?? defaultContacts;
     },
     async putContacts(c) {
-      await kvPut('contacts', c);
+      await kvPut('contacts:v2', c);
     },
     async wipe() {
       await req((await tx('messages', 'readwrite')).clear());

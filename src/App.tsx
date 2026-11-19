@@ -7,6 +7,7 @@ import { Caregiver } from './screens/Caregiver';
 import { Home } from './screens/Home';
 import { Messages } from './screens/Messages';
 import { Person } from './screens/Person';
+import { PhoneSetup } from './screens/PhoneSetup';
 import { Talk } from './screens/Talk';
 import { draftAtRisk } from './state/flow';
 import { conversation, unplayedFrom } from './state/messages';
@@ -20,7 +21,8 @@ type View =
   | { name: 'person'; id: string }
   | { name: 'talk' }
   | { name: 'messages'; id: string }
-  | { name: 'caregiver' };
+  | { name: 'caregiver' }
+  | { name: 'phone'; id: string; back: 'home' | 'caregiver' };
 
 export function App({ services }: { services: Services }) {
   const { store } = services;
@@ -28,6 +30,7 @@ export function App({ services }: { services: Services }) {
   const [contacts, setContacts] = useState<Contact[]>(defaultContacts);
   const [messages, setMessages] = useState<Message[]>([]);
   const [persistent, setPersistent] = useState<boolean | null>(null);
+  const [caregiverUnlocked, setCaregiverUnlocked] = useState(false);
   const [rawView, setView] = useState<View>(() => (location.hash === '#caregiver' ? { name: 'caregiver' } : { name: 'home' }));
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
@@ -67,7 +70,7 @@ export function App({ services }: { services: Services }) {
 
   const player = usePlayer();
   const contactOf = useCallback(
-    (id: string) => contacts.find((c) => c.id === id) ?? { id, name: id, photo: null, order: 99 },
+    (id: string) => contacts.find((c) => c.id === id) ?? { id, name: id, photo: null, order: 99, phone: null, country: null },
     [contacts],
   );
 
@@ -112,7 +115,16 @@ export function App({ services }: { services: Services }) {
 
   const pending = draftAtRisk(flow);
   // Sent screen has its own big HOME as the main action; avoid two identical buttons.
-  const showHome = view.name !== 'home' && view.name !== 'caregiver' && !(view.name === 'talk' && flow.kind === 'sent');
+  const showHome =
+    view.name !== 'home' &&
+    view.name !== 'caregiver' &&
+    view.name !== 'phone' && // keypad uses the full screen and has its own CANCEL
+    !(view.name === 'talk' && flow.kind === 'sent');
+
+  function saveContacts(c: Contact[]) {
+    setContacts(c);
+    void store.putContacts(c);
+  }
 
   let body: React.ReactNode;
   if (view.name === 'caregiver') {
@@ -134,10 +146,10 @@ export function App({ services }: { services: Services }) {
           setSettings(s);
           void store.putSettings(s);
         }}
-        onContacts={(c) => {
-          setContacts(c);
-          void store.putContacts(c);
-        }}
+        onContacts={saveContacts}
+        unlocked={caregiverUnlocked}
+        onUnlock={() => setCaregiverUnlocked(true)}
+        onEditPhone={(id) => setView({ name: 'phone', id, back: 'caregiver' })}
         onMessage={saveMessage}
         onWipe={async () => {
           player.stop();
@@ -146,6 +158,21 @@ export function App({ services }: { services: Services }) {
           location.reload();
         }}
         onClose={() => setView({ name: 'home' })}
+      />
+    );
+  } else if (view.name === 'phone') {
+    const c = contactOf(view.id);
+    const back = view.back;
+    body = (
+      <PhoneSetup
+        key={c.id}
+        t={t}
+        contact={c}
+        onCancel={() => setView(back === 'home' ? { name: 'home' } : { name: 'caregiver' })}
+        onSave={(phone, country) => {
+          saveContacts(contacts.map((x) => (x.id === c.id ? { ...x, phone, country } : x)));
+          setView(back === 'home' ? { name: 'person', id: c.id } : { name: 'caregiver' });
+        }}
       />
     );
   } else if (view.name === 'talk' && flow.kind !== 'idle') {
@@ -209,7 +236,9 @@ export function App({ services }: { services: Services }) {
         unplayed={(id) => unplayedFrom(messages, id)}
         pendingDraft={flow.kind === 'review' || flow.kind === 'error' || flow.kind === 'confirm-discard' ? pending : null}
         canUndo={flow.kind === 'idle' && !!flow.discarded}
-        onContact={(id) => setView({ name: 'person', id })}
+        onContact={(id) =>
+          setView(contactOf(id).phone ? { name: 'person', id } : { name: 'phone', id, back: 'home' })
+        }
         onOpenDraft={() => setView({ name: 'talk' })}
         onUndo={() => {
           dispatch({ type: 'UNDO_DISCARD' });

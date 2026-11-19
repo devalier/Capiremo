@@ -15,7 +15,8 @@ import {
 } from '../state/messages';
 import { newId } from '../state/useTalkFlow';
 import type { Contact, Message } from '../types';
-import { SPEAKER_ID } from '../types';
+import { MAX_CONTACTS, SPEAKER_ID } from '../types';
+import { formatE164 } from '../phone';
 
 interface Props {
   contacts: Contact[];
@@ -27,6 +28,9 @@ interface Props {
   onPlay: (m: Message) => void;
   onSettings: (s: Settings) => void;
   onContacts: (c: Contact[]) => void;
+  onEditPhone: (contactId: string) => void;
+  unlocked: boolean;
+  onUnlock: () => void;
   onMessage: (m: Message) => void;
   onWipe: () => void;
   onClose: () => void;
@@ -35,10 +39,9 @@ interface Props {
 const GATE_CODE = '2468';
 
 export function Caregiver(p: Props) {
-  const [unlocked, setUnlocked] = useState(false);
   const [code, setCode] = useState('');
 
-  if (!unlocked) {
+  if (!p.unlocked) {
     return (
       <main className="screen caregiver gate">
         <h1>Caregiver area</h1>
@@ -52,7 +55,7 @@ export function Caregiver(p: Props) {
           value={code}
           onChange={(e) => {
             setCode(e.target.value);
-            if (e.target.value === GATE_CODE) setUnlocked(true);
+            if (e.target.value === GATE_CODE) p.onUnlock();
           }}
         />
         <button type="button" className="cg-btn" onClick={p.onClose}>
@@ -99,8 +102,8 @@ export function Caregiver(p: Props) {
         <ReplyRecorder contacts={p.contacts} forceDemo={p.settings.forceDemoAudio} onMessage={p.onMessage} />
       </Section>
 
-      <Section title="Contacts">
-        <ContactsEditor contacts={p.contacts} onContacts={p.onContacts} />
+      <Section title={`Contacts (up to ${MAX_CONTACTS})`}>
+        <ContactsEditor contacts={p.contacts} onContacts={p.onContacts} onEditPhone={p.onEditPhone} />
       </Section>
 
       <Section title="Settings">
@@ -326,32 +329,97 @@ function ReplyRecorder({ contacts, forceDemo, onMessage }: { contacts: Contact[]
   );
 }
 
-function ContactsEditor({ contacts, onContacts }: { contacts: Contact[]; onContacts: (c: Contact[]) => void }) {
+function ContactsEditor({
+  contacts,
+  onContacts,
+  onEditPhone,
+}: {
+  contacts: Contact[];
+  onContacts: (c: Contact[]) => void;
+  onEditPhone: (id: string) => void;
+}) {
+  const [removing, setRemoving] = useState<string | null>(null);
+  const sorted = [...contacts].sort((a, b) => a.order - b.order);
+  const update = (id: string, patch: Partial<Contact>) =>
+    onContacts(contacts.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+
   async function setPhoto(id: string, file: File | undefined) {
     if (!file) return;
-    const dataUrl = await downscale(file, 512);
-    onContacts(contacts.map((c) => (c.id === id ? { ...c, photo: dataUrl } : c)));
+    update(id, { photo: await downscale(file, 512) });
   }
+
+  function add() {
+    if (contacts.length >= MAX_CONTACTS) return;
+    const order = Math.max(-1, ...contacts.map((c) => c.order)) + 1;
+    onContacts([...contacts, { id: newId('contact'), name: 'New contact', photo: null, order, phone: null, country: null }]);
+  }
+
   return (
     <div className="cg-contacts">
-      {contacts.map((c) => (
-        <div key={c.id} className="cg-row">
-          <input
-            aria-label="Name"
-            value={c.name}
-            onChange={(e) => onContacts(contacts.map((x) => (x.id === c.id ? { ...x, name: e.target.value } : x)))}
-          />
-          <label className="cg-btn">
-            Photo
-            <input type="file" accept="image/*" hidden onChange={(e) => void setPhoto(c.id, e.target.files?.[0])} />
+      {sorted.map((c) => (
+        <div key={c.id} className="cg-contact">
+          <label className="cg-field">
+            Name
+            <input
+              aria-label={`Name of ${c.name}`}
+              value={c.name}
+              maxLength={24}
+              onChange={(e) => update(c.id, { name: e.target.value })}
+              onBlur={(e) => !e.target.value.trim() && update(c.id, { name: 'Contact' })}
+            />
           </label>
-          {c.photo && (
-            <button type="button" className="cg-btn" onClick={() => onContacts(contacts.map((x) => (x.id === c.id ? { ...x, photo: null } : x)))}>
-              Remove photo
+          <div className="cg-row">
+            <span className="cg-phone">{c.phone ? formatE164(c.phone) : 'No number'}</span>
+            <button type="button" className="cg-btn" onClick={() => onEditPhone(c.id)}>
+              {c.phone ? 'Change number' : 'Set number'}
             </button>
-          )}
+            {c.phone && (
+              <button type="button" className="cg-btn" onClick={() => update(c.id, { phone: null })}>
+                Clear number
+              </button>
+            )}
+          </div>
+          <div className="cg-row">
+            <label className="cg-btn">
+              Photo
+              <input type="file" accept="image/*" hidden onChange={(e) => void setPhoto(c.id, e.target.files?.[0])} />
+            </label>
+            {c.photo && (
+              <button type="button" className="cg-btn" onClick={() => update(c.id, { photo: null })}>
+                Remove photo
+              </button>
+            )}
+            {contacts.length > 1 &&
+              (removing === c.id ? (
+                <>
+                  <span>Remove {c.name}? Their messages stay in the caregiver list.</span>
+                  <button
+                    type="button"
+                    className="cg-btn danger"
+                    onClick={() => {
+                      onContacts(contacts.filter((x) => x.id !== c.id));
+                      setRemoving(null);
+                    }}
+                  >
+                    Yes, remove
+                  </button>
+                  <button type="button" className="cg-btn" onClick={() => setRemoving(null)}>
+                    No
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="cg-btn danger" onClick={() => setRemoving(c.id)}>
+                  Remove contact
+                </button>
+              ))}
+          </div>
         </div>
       ))}
+      {contacts.length < MAX_CONTACTS && (
+        <button type="button" className="cg-btn" onClick={add}>
+          + Add contact
+        </button>
+      )}
     </div>
   );
 }

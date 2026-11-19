@@ -51,8 +51,20 @@ async function phone({ mic = true } = {}) {
 
 const btn = (page, name) => page.getByRole('button', { name, exact: false });
 
+const key = (page, k) => page.getByRole('button', { name: k, exact: true });
+
+/** Tap a contact; if no number is set yet, enter one on the keypad first. */
+async function openContact(page, name = 'Paul', digits = '3331234567') {
+  await btn(page, name).click();
+  if (await page.locator('.keypad').isVisible()) {
+    for (const d of digits) await key(page, d).click();
+    await btn(page, 'SAVE').click();
+  }
+  await btn(page, 'TALK').waitFor();
+}
+
 async function record(page, ms = 1500) {
-  await btn(page, 'Paul').click();
+  await openContact(page);
   await btn(page, 'TALK').click();
   await page.getByText('Recording…').waitFor();
   await page.waitForTimeout(ms);
@@ -63,7 +75,7 @@ async function record(page, ms = 1500) {
 test('record → review → send → messages → play', async () => {
   const { ctx, page, errors } = await phone();
   await page.screenshot({ path: `${SHOTS}home.png` });
-  await btn(page, 'Paul').click();
+  await openContact(page);
   await page.screenshot({ path: `${SHOTS}person.png` });
   await btn(page, 'TALK').click();
   await page.getByText('Recording…').waitFor();
@@ -98,7 +110,7 @@ test('nothing is auto-sent; a draft survives reload', async () => {
   await btn(page, 'OPEN').click();
   await page.getByText('Your message to Paul').waitFor();
   await btn(page, 'HOME').click();
-  await btn(page, 'Paul').click();
+  await openContact(page);
   await btn(page, 'MESSAGES').click();
   assert.equal(await page.locator('.msg').count(), 0, 'no message was sent');
   await ctx.close();
@@ -123,7 +135,7 @@ test('cancel needs confirmation and can be undone', async () => {
 
 test('interruption while recording keeps the audio', async () => {
   const { ctx, page } = await phone();
-  await btn(page, 'Paul').click();
+  await openContact(page);
   await btn(page, 'TALK').click();
   await page.getByText('Recording…').waitFor();
   await page.waitForTimeout(1200);
@@ -143,7 +155,7 @@ test('microphone denied → clear message → demo fallback', async () => {
     navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException('denied', 'NotAllowedError'));
   });
   await page.goto(URL);
-  await btn(page, 'Paul').click();
+  await openContact(page);
   await btn(page, 'TALK').click();
   await page.getByText('The microphone is not allowed').waitFor();
   await page.screenshot({ path: `${SHOTS}denied.png` });
@@ -180,7 +192,7 @@ test('caregiver: gate, simulated reply, recipient layers', async () => {
 
   await page.locator('.tile .badge').first().waitFor();
   await page.screenshot({ path: `${SHOTS}home-new.png` });
-  await btn(page, 'Paul').click();
+  await openContact(page);
   await btn(page, 'MESSAGES').click();
   assert.equal(await page.locator('.msg').count(), 2);
   await btn(page, 'Play: Paul').click();
@@ -192,7 +204,10 @@ test('caregiver: gate, simulated reply, recipient layers', async () => {
 
 test('no horizontal overflow and primary targets are large', async () => {
   const { ctx, page } = await phone();
-  for (const step of [async () => {}, async () => btn(page, 'Paul').click()]) {
+  const tiles = await page.locator('.tile').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+  assert.equal(tiles.length, 4);
+  assert.ok(tiles.every((h) => h >= 120), `small tile: ${tiles}`);
+  for (const step of [async () => {}, async () => openContact(page)]) {
     await step();
     const { sw, cw } = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
     assert.ok(sw <= cw, `horizontal overflow ${sw} > ${cw}`);
@@ -201,5 +216,72 @@ test('no horizontal overflow and primary targets are large', async () => {
   assert.ok(talk.height >= 140, `TALK height ${talk.height}`);
   const all = await page.locator('button.big').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
   assert.ok(all.every((h) => h >= 72), `small button: ${all}`);
+  await ctx.close();
+});
+
+test('default contacts; keypad with country selector; caregiver renames and changes numbers', async () => {
+  const { ctx, page, errors } = await phone();
+  for (const n of ['Paul', 'Francesca', 'Izumi', 'Dan']) await btn(page, n).waitFor();
+  assert.equal(await page.getByText('Stefania').count(), 0);
+
+  // No number yet → keypad, full screen, no HOME bar
+  await btn(page, 'Izumi').click();
+  await page.locator('.keypad').waitFor();
+  assert.equal(await btn(page, 'HOME').count(), 0);
+  await page.screenshot({ path: `${SHOTS}keypad.png` });
+  const keys = await page.locator('.key').evaluateAll((els) => els.map((e) => e.getBoundingClientRect()));
+  assert.equal(keys.length, 12);
+  assert.ok(keys.every((r) => r.height >= 72 && r.width >= 100), 'keys are large');
+  assert.ok(await btn(page, 'SAVE').isDisabled(), 'save disabled while empty');
+
+  // Choose Japan, type national number with trunk 0
+  await page.locator('.country-btn').click();
+  await page.screenshot({ path: `${SHOTS}countries.png` });
+  await page.getByRole('button', { name: /Japan/ }).click();
+  for (const d of '09012345678') await key(page, d).click();
+  await key(page, 'Delete last digit').click();
+  await key(page, '8').click();
+  await btn(page, 'SAVE').click();
+  await page.getByText('+81 901 234 5678').waitFor();
+
+  // Cancel leaves number unset
+  await btn(page, 'HOME').click();
+  await btn(page, 'Dan').click();
+  await page.locator('.keypad').waitFor();
+  await btn(page, 'CANCEL').click();
+  await btn(page, 'Dan').click();
+  await page.locator('.keypad').waitFor();
+
+  // '+' typed first → international, country button disabled
+  await key(page, '+').click();
+  assert.ok(await page.locator('.country-btn').isDisabled());
+  for (const d of '447700900123') await key(page, d).click();
+  await btn(page, 'SAVE').click();
+  await page.getByText('+44 770 090 0123').waitFor();
+  await btn(page, 'HOME').click();
+
+  // Caregiver: rename, change number, add/remove capped at 4
+  await page.getByRole('button', { name: 'Caregiver' }).click();
+  await page.getByLabel('Code').fill('2468');
+  assert.equal(await btn(page, '+ Add contact').count(), 0, 'already 4 contacts');
+  await page.getByLabel('Name of Dan').fill('Daniel');
+  const izumi = page.locator('.cg-contact').nth(2);
+  await izumi.getByRole('button', { name: 'Change number' }).click();
+  await page.locator('.keypad').waitFor();
+  for (const d of '3339876543') await key(page, d).click();
+  await page.locator('.country-btn').click();
+  await page.getByRole('button', { name: /Italia/ }).click();
+  await btn(page, 'SAVE').click();
+  await page.getByText('+39 333 987 6543').waitFor(); // back in caregiver, still unlocked
+  await page.locator('.cg-contact').nth(3).getByRole('button', { name: 'Remove contact' }).click();
+  await btn(page, 'Yes, remove').click();
+  await btn(page, '+ Add contact').waitFor();
+  await page.screenshot({ path: `${SHOTS}caregiver-contacts.png`, fullPage: true });
+  await btn(page, 'Done').click();
+  await page.reload();
+  assert.equal(await page.locator('.tile').count(), 3);
+  assert.equal(await page.getByText('Daniel').count(), 0);
+  await page.screenshot({ path: `${SHOTS}home-3.png` });
+  assert.deepEqual(errors, []);
   await ctx.close();
 });

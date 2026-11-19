@@ -1,6 +1,7 @@
 import type { T } from '../i18n';
 import type { Contact } from '../types';
 import { Avatar, Big, Icon } from '../components/ui';
+import { formatE164 } from '../phone';
 
 interface Props {
   t: T;
@@ -15,7 +16,10 @@ export function Person({ t, contact, unplayed, onTalk, onMessages }: Props) {
     <main className="screen person">
       <header className="who">
         <Avatar contact={contact} size="m" />
-        <h1>{contact.name}</h1>
+        <div>
+          <h1>{contact.name}</h1>
+          {contact.phone && <p className="phone-line">{formatE164(contact.phone)}</p>}
+        </div>
       </header>
       <Big label={t('talk')} variant="primary" size="xl" icon={Icon.mic} onClick={onTalk} />
       <Big

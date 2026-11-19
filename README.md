@@ -12,13 +12,14 @@ Licence: AGPL-3.0.
 
 | Flow | Notes |
 |---|---|
-| Home → person tile → **TALK** → **STOP** → review → **SEND** | Tap to start, tap to stop. No hold-to-talk, swipes or long-press. |
+| Home → person tile → **TALK** → **STOP** → review → **SEND** | Up to 4 contacts (default: Paul, Francesca, Izumi, Dan). Tap to start, tap to stop. No hold-to-talk, swipes or long-press. |
+| Phone number setup | Tapping a contact with no number opens a full-screen keypad: big 1–9, +, 0 and delete keys, a country selector (flag + dial code; defaults to the phone's region, else Italy) and the number display. Saves in international (E.164) format. Typing **+** first enters a full international number and bypasses the country. Nothing is dialled or sent to the number yet; it is stored for the messaging backend. |
 | Review: **LISTEN**, **SEND**, **RECORD AGAIN**, **CANCEL** | Nothing is ever sent automatically. |
 | Messages → **PLAY** | Newest first, one big button per message, NEW badge for unplayed replies. |
 | Draft safety | Draft saved to IndexedDB the moment recording stops. Reload, crash, HOME or backgrounding does not lose it. Backgrounding *during* recording finalises what was captured and keeps it as a draft marked "interrupted". |
 | Delete safety | CANCEL asks for confirmation; a deleted recording can be brought back (survives reload) until the next recording is kept. RECORD AGAIN keeps the previous take until the new one is captured. |
 | Demo fallback | No microphone API (plain HTTP, no mic) or permission denied → a clearly labelled synthetic "demo sound" can be used to exercise the flow. |
-| Caregiver area | Small "Caregiver" link at the bottom of Home, then type `2468` (prevents accidental entry; **not** security). Status (mic, storage persistence, installed or not); recipient view of every message with separate layers — original audio / raw machine transcription / AI suggestion (unverified) / human-confirmed meaning; "simulate a reply" recorder; contact names and photos; label language (English / Italiano / both); beep and spoken-feedback toggles; delete all data. |
+| Caregiver area | Small "Caregiver" link at the bottom of Home, then type `2468` (prevents accidental entry; **not** security). Status (mic, storage persistence, installed or not); recipient view of every message with separate layers — original audio / raw machine transcription / AI suggestion (unverified) / human-confirmed meaning; "simulate a reply" recorder; contacts: rename, set/change/clear number (same keypad), photo, add/remove (1–4); label language (English / Italiano / both); beep and spoken-feedback toggles; delete all data. |
 | Offline | Service worker caches the app shell; all data is local. |
 
 ## Run locally
@@ -85,7 +86,8 @@ src/
   services/types.ts      ASR, interpretation, delivery interfaces
   services/mock.ts       Honest no-op implementations (not connected / abstain / this device only)
   storage/store.ts       IndexedDB store (+ in-memory store for tests)
-  screens/               Home, Person, Talk (record/review/sent/errors), Messages, Caregiver
+  screens/               Home, Person, PhoneSetup (keypad), Talk (record/review/sent/errors), Messages, Caregiver
+  phone.ts               Keypad input + E.164 conversion (tested)
 e2e/flow.test.mjs        Chromium end-to-end tests with a fake microphone
 docs/                    Architecture & privacy decisions, iOS validation checklist
 ```

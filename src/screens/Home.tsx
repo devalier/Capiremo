@@ -31,7 +31,7 @@ export function Home({ t, contacts, unplayed, pendingDraft, canUndo, onContact, 
           <Big label={t('undo')} variant="neutral" size="m" icon={Icon.again} onClick={onUndo} />
         </section>
       )}
-      <div className="tiles">
+      <div className={`tiles ${contacts.length > 2 ? 'many' : ''}`}>
         {contacts.map((c) => {
           const n = unplayed(c.id);
           return (

@@ -5,6 +5,7 @@ import { Big, Icon } from './components/ui';
 import { makeT, speechLang } from './i18n';
 import { Caregiver } from './screens/Caregiver';
 import { Home } from './screens/Home';
+import { People } from './screens/People';
 import { Messages } from './screens/Messages';
 import { Person } from './screens/Person';
 import { PhoneSetup } from './screens/PhoneSetup';
@@ -21,12 +22,13 @@ import { SPEAKER_ID } from './types';
 
 type View =
   | { name: 'home' }
+  | { name: 'people' }
   | { name: 'person'; id: string }
   | { name: 'talk' }
   | { name: 'messages'; id: string }
   | { name: 'caregiver' }
   | { name: 'train' }
-  | { name: 'phone'; id: string; back: 'home' | 'caregiver' };
+  | { name: 'phone'; id: string; back: 'people' | 'caregiver' };
 
 export function App({ services }: { services: Services }) {
   const { store } = services;
@@ -217,10 +219,10 @@ export function App({ services }: { services: Services }) {
         key={c.id}
         t={t}
         contact={c}
-        onCancel={() => setView(back === 'home' ? { name: 'home' } : { name: 'caregiver' })}
+        onCancel={() => setView(back === 'people' ? { name: 'people' } : { name: 'caregiver' })}
         onSave={(phone, country) => {
           saveContacts(contacts.map((x) => (x.id === c.id ? { ...x, phone, country } : x)));
-          setView(back === 'home' ? { name: 'person', id: c.id } : { name: 'caregiver' });
+          setView(back === 'people' ? { name: 'person', id: c.id } : { name: 'caregiver' });
         }}
       />
     );
@@ -247,6 +249,15 @@ export function App({ services }: { services: Services }) {
         maxReached={maxReached}
         remoteDelivery={services.delivery.remote}
         level={level}
+      />
+    );
+  } else if (view.name === 'people') {
+    body = (
+      <People
+        t={t}
+        contacts={[...contacts].sort((a, b) => a.order - b.order)}
+        unplayed={(id) => unplayedFrom(messages, id)}
+        onContact={(id) => setView(contactOf(id).phone ? { name: 'person', id } : { name: 'phone', id, back: 'people' })}
       />
     );
   } else if (view.name === 'person') {
@@ -283,19 +294,18 @@ export function App({ services }: { services: Services }) {
     body = (
       <Home
         t={t}
-        contacts={[...contacts].sort((a, b) => a.order - b.order)}
-        unplayed={(id) => unplayedFrom(messages, id)}
+        contacts={contacts}
+        slots={settings.appSlots}
+        unplayedTotal={contacts.reduce((n, c) => n + unplayedFrom(messages, c.id), 0)}
         pendingDraft={flow.kind === 'review' || flow.kind === 'error' || flow.kind === 'confirm-discard' ? pending : null}
         canUndo={flow.kind === 'idle' && !!flow.discarded}
-        onContact={(id) =>
-          setView(contactOf(id).phone ? { name: 'person', id } : { name: 'phone', id, back: 'home' })
-        }
+        onPeople={() => setView({ name: 'people' })}
         onOpenDraft={() => setView({ name: 'talk' })}
         onUndo={() => {
           dispatch({ type: 'UNDO_DISCARD' });
           setView({ name: 'talk' });
         }}
-        onCaregiver={() => setView({ name: 'caregiver' })}
+        onAdmin={() => setView({ name: 'caregiver' })}
       />
     );
   }

@@ -18,6 +18,7 @@ import type { Contact, Message } from '../types';
 import { MAX_CONTACTS, SPEAKER_ID } from '../types';
 import { formatE164 } from '../phone';
 import { AiSettings } from './AiSettings';
+import { AppSlotsEditor } from './AppSlotsEditor';
 
 interface Props {
   contacts: Contact[];
@@ -81,6 +82,10 @@ export function Caregiver(p: Props) {
         <span className="cg-train-title">🎙 Train voice</span>
         <span className="cg-dim">{p.trainingCount} confirmed recording{p.trainingCount === 1 ? '' : 's'}</span>
       </button>
+
+      <Section title="Home buttons">
+        <AppSlotsEditor slots={p.settings.appSlots} onChange={(appSlots) => p.onSettings({ ...p.settings, appSlots })} />
+      </Section>
 
       <Section title="AI (speech-to-text and interpretation)">
         <AiSettings ai={p.settings.ai} onChange={(ai) => p.onSettings({ ...p.settings, ai })} />

@@ -9,11 +9,14 @@ import { Messages } from './screens/Messages';
 import { Person } from './screens/Person';
 import { PhoneSetup } from './screens/PhoneSetup';
 import { Talk } from './screens/Talk';
+import { Train } from './screens/Train';
+import { asrAvailable } from './ai/client';
+import { recoverInterrupted, useAi } from './ai/useAi';
 import { draftAtRisk } from './state/flow';
 import { conversation, unplayedFrom } from './state/messages';
 import { useTalkFlow, type Services } from './state/useTalkFlow';
 import { defaultContacts, defaultSettings, requestPersistence, type Settings } from './storage/store';
-import type { Contact, Message } from './types';
+import type { Contact, Message, TrainingExample } from './types';
 import { SPEAKER_ID } from './types';
 
 type View =
@@ -22,6 +25,7 @@ type View =
   | { name: 'talk' }
   | { name: 'messages'; id: string }
   | { name: 'caregiver' }
+  | { name: 'train' }
   | { name: 'phone'; id: string; back: 'home' | 'caregiver' };
 
 export function App({ services }: { services: Services }) {
@@ -29,6 +33,8 @@ export function App({ services }: { services: Services }) {
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [contacts, setContacts] = useState<Contact[]>(defaultContacts);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [training, setTraining] = useState<TrainingExample[]>([]);
+  const [vocabulary, setVocabulary] = useState<string[]>([]);
   const [persistent, setPersistent] = useState<boolean | null>(null);
   const [caregiverUnlocked, setCaregiverUnlocked] = useState(false);
   const [rawView, setView] = useState<View>(() => (location.hash === '#caregiver' ? { name: 'caregiver' } : { name: 'home' }));
@@ -36,11 +42,15 @@ export function App({ services }: { services: Services }) {
   messagesRef.current = messages;
 
   useEffect(() => {
-    void Promise.all([store.getSettings(), store.getContacts(), store.getMessages()]).then(([s, c, m]) => {
-      setSettings(s);
-      setContacts(c);
-      setMessages(m);
-    });
+    void Promise.all([store.getSettings(), store.getContacts(), store.getMessages(), store.getTraining(), store.getVocabulary()]).then(
+      ([s, c, m, tr, v]) => {
+        setSettings(s);
+        setContacts(c);
+        setMessages(m.map(recoverInterrupted));
+        setTraining(tr);
+        setVocabulary(v);
+      },
+    );
     void requestPersistence().then(setPersistent);
   }, [store]);
 
@@ -64,9 +74,15 @@ export function App({ services }: { services: Services }) {
     forceDemo: settings.forceDemoAudio,
     sounds: settings.sounds,
     onMessage: upsertMessage,
-    recentMessages: () => messagesRef.current.slice(-10),
+    afterSend: (m) => {
+      if (asrAvailable(settings.ai)) void aiRef.current.processMessage(m);
+    },
   });
   const view: View = rawView.name === 'talk' && flow.kind === 'idle' ? { name: 'home' } : rawView;
+
+  const aiTools = useAi({ settings, contacts, vocabulary, training, messages, saveMessage });
+  const aiRef = useRef(aiTools);
+  aiRef.current = aiTools;
 
   const player = usePlayer();
   const contactOf = useCallback(
@@ -90,13 +106,13 @@ export function App({ services }: { services: Services }) {
 
   // Any active flow takes over the screen, so a draft is never hidden mid-task.
   useEffect(() => {
-    if (flow.kind !== 'idle' && flow.kind !== 'review' && view.name !== 'caregiver') setView({ name: 'talk' });
+    if (flow.kind !== 'idle' && flow.kind !== 'review' && view.name !== 'caregiver' && view.name !== 'train') setView({ name: 'talk' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flow.kind]);
 
   // Keep the hash in sync so the caregiver page can be bookmarked; everything else is "#".
   useEffect(() => {
-    const h = view.name === 'caregiver' ? '#caregiver' : '';
+    const h = view.name === 'caregiver' || view.name === 'train' ? '#caregiver' : '';
     if (location.hash !== h) history.replaceState(null, '', h || location.pathname);
   }, [view]);
 
@@ -118,6 +134,7 @@ export function App({ services }: { services: Services }) {
   const showHome =
     view.name !== 'home' &&
     view.name !== 'caregiver' &&
+    view.name !== 'train' &&
     view.name !== 'phone' && // keypad uses the full screen and has its own CANCEL
     !(view.name === 'talk' && flow.kind === 'sent');
 
@@ -135,12 +152,9 @@ export function App({ services }: { services: Services }) {
         settings={settings}
         playing={player.playing}
         persistent={persistent}
-        services={{
-          asr: services.asr.name,
-          interpreter: services.interpreter.name,
-          delivery: services.delivery.name,
-          remote: services.delivery.remote,
-        }}
+        services={{ delivery: services.delivery.name, remote: services.delivery.remote }}
+        trainingCount={training.length}
+        onTrain={() => setView({ name: 'train' })}
         onPlay={playMessage}
         onSettings={(s) => {
           setSettings(s);
@@ -158,6 +172,41 @@ export function App({ services }: { services: Services }) {
           location.reload();
         }}
         onClose={() => setView({ name: 'home' })}
+      />
+    );
+  } else if (view.name === 'train') {
+    body = (
+      <Train
+        settings={settings}
+        contacts={contacts}
+        training={training}
+        vocabulary={vocabulary}
+        prompt={aiTools.prompt}
+        playing={player.playing}
+        onPlay={(id, audio) => player.toggle(id, audio)}
+        transcribe={aiTools.runTranscribe}
+        interpret={aiTools.runInterpret}
+        onSave={(e) => {
+          setTraining((prev) => [...prev.filter((x) => x.id !== e.id), e]);
+          void store.putTraining(e);
+        }}
+        onDelete={(id) => {
+          setTraining((prev) => prev.filter((x) => x.id !== id));
+          void store.deleteTraining(id);
+        }}
+        onVocabulary={(v) => {
+          setVocabulary(v);
+          void store.putVocabulary(v);
+        }}
+        onPhrases={(ph) => {
+          const s = { ...settings, phrases: ph };
+          setSettings(s);
+          void store.putSettings(s);
+        }}
+        onClose={() => {
+          player.stop();
+          setView({ name: 'caregiver' });
+        }}
       />
     );
   } else if (view.name === 'phone') {
@@ -225,7 +274,9 @@ export function App({ services }: { services: Services }) {
         messages={conversation(messages, c.id)}
         playing={player.playing}
         playFailed={player.failed}
+        canTranscribe={asrAvailable(settings.ai)}
         onPlay={playMessage}
+        onTranscribe={(m) => void aiTools.processMessage(m)}
       />
     );
   } else {

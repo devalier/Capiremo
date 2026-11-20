@@ -1,4 +1,4 @@
-// Pure message operations. The separation rules from the spec are enforced here:
+// Pure message operations. Layer-separation rules enforced here:
 //  - Machine interpretations are always 'unverified'.
 //  - Feedback on a suggestion never rewrites the ASR text or the suggestion itself.
 //  - A verified correction only exists when a human explicitly confirms wording.
@@ -35,7 +35,7 @@ export function withAsr(m: Message, asr: AsrResult): Message {
   return { ...m, asr };
 }
 
-/** At most two suggestions are kept (spec 5.3); anything claiming another status is rejected. */
+/** At most two suggestions are kept; anything claiming another status is rejected. */
 export function withInterpretations(m: Message, candidates: InterpretationCandidate[]): Message {
   const clean = candidates
     .filter((c) => c.text.trim().length > 0)

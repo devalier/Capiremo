@@ -1,13 +1,11 @@
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import { abstainingInterpreter, localOnlyDelivery, unavailableAsr } from './services/mock';
+import { localOnlyDelivery } from './services/mock';
 import { indexedDbStore } from './storage/store';
 import './styles.css';
 
 const services = {
   store: indexedDbStore(),
-  asr: unavailableAsr,
-  interpreter: abstainingInterpreter,
   delivery: localOnlyDelivery,
 };
 

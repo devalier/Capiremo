@@ -47,8 +47,11 @@ export function Home({ t, contacts, unplayed, pendingDraft, canUndo, onContact, 
           );
         })}
       </div>
-      <button type="button" className="caregiver-link" onClick={onCaregiver}>
-        Caregiver
+      {/* Admin: small, out of the way, but a full 48px target. Protected by a typed code. */}
+      <button type="button" className="admin-gear" onClick={onCaregiver} aria-label="Admin">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true">
+          <path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1L11 21h4l.4-2.9a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5L19.4 13ZM13 15.5A3.5 3.5 0 1 1 13 8.5a3.5 3.5 0 0 1 0 7Z" />
+        </svg>
       </button>
     </main>
   );

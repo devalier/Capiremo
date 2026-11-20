@@ -1,0 +1,15 @@
+name = "capiremo-api"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Comma-separated list of web origins allowed to call this API.
+ALLOWED_ORIGINS = "https://devalier.github.io,http://localhost:5173,https://localhost:5173"
+CLAUDE_MODEL = "claude-opus-5-5"
+OPENAI_TRANSCRIBE_MODEL = "gpt-4o-transcribe"
+
+# Secrets (never in this file) — set with:
+#   npx wrangler secret put APP_TOKEN          (long random string; also entered in the app's admin)
+#   npx wrangler secret put ANTHROPIC_API_KEY
+#   npx wrangler secret put OPENAI_API_KEY

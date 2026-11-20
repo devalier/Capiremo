@@ -65,7 +65,7 @@ describe('talk flow', () => {
 
   it('TALK is ignored while a draft is pending', () => {
     const r = toReview();
-    expect(flowReducer(r, { type: 'TALK', recipientId: 'stefania' })).toBe(r);
+    expect(flowReducer(r, { type: 'TALK', recipientId: 'dan' })).toBe(r);
   });
 
   it('cancel requires confirmation; KEEP returns to the same draft', () => {

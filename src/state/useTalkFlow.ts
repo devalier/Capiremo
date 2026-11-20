@@ -3,16 +3,14 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { CaptureError, MAX_RECORDING_MS, demoCapture, micCapture, type Capture } from '../audio/capture';
 import { beep } from '../audio/feedback';
-import type { AsrService, DeliveryService, InterpretationService } from '../services/types';
+import type { DeliveryService } from '../services/types';
 import type { Store } from '../storage/store';
 import type { AudioClip, Draft, Message, UserId } from '../types';
 import { draftAtRisk, flowReducer, initialFlow, type FlowState } from './flow';
-import { messageFromDraft, withAsr, withInterpretations } from './messages';
+import { messageFromDraft } from './messages';
 
 export interface Services {
   store: Store;
-  asr: AsrService;
-  interpreter: InterpretationService;
   delivery: DeliveryService;
 }
 
@@ -26,10 +24,10 @@ interface Options {
   forceDemo: boolean;
   sounds: boolean;
   onMessage: (m: Message) => void;
-  recentMessages: () => Message[];
+  afterSend?: (m: Message) => void;
 }
 
-export function useTalkFlow({ services, forceDemo, sounds, onMessage, recentMessages }: Options) {
+export function useTalkFlow({ services, forceDemo, sounds, onMessage, afterSend }: Options) {
   const [flow, dispatch] = useReducer(flowReducer, initialFlow);
   const capture = useRef<Capture | null>(null);
   const demoNext = useRef(false);
@@ -188,24 +186,8 @@ export function useTalkFlow({ services, forceDemo, sounds, onMessage, recentMess
       if (sounds) beep('sent');
       dispatch({ type: 'SEND_OK', messageId: id });
 
-      // Optional, never blocks or replaces the audio.
-      try {
-        msg = withAsr(msg, { status: 'pending' });
-        const asr = await services.asr.transcribe(draft.audio);
-        msg = withAsr(msg, asr);
-        if (asr.status === 'done') {
-          const candidates = await services.interpreter.suggest({
-            asrText: asr.text,
-            recent: recentMessages(),
-            vocabulary: [],
-          });
-          msg = withInterpretations(msg, candidates);
-        }
-      } catch (e) {
-        msg = withAsr(msg, { status: 'failed', reason: String(e) });
-      }
-      await services.store.putMessage(msg);
-      onMessage(msg);
+      // Optional AI processing happens afterwards and never blocks or replaces the audio.
+      afterSend?.(msg);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flow.kind === 'sending' ? flow : null]);

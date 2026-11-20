@@ -64,6 +64,16 @@ const strings = {
   chooseCountry: { en: 'Choose country', it: 'Scegli il paese' },
   save: { en: 'SAVE', it: 'SALVA' },
   deleteDigit: { en: 'Delete last digit', it: 'Cancella ultima cifra' },
+  showText: { en: 'TEXT', it: 'TESTO' },
+  hideText: { en: 'HIDE TEXT', it: 'NASCONDI' },
+  transcribe: { en: 'MAKE TEXT', it: 'CREA TESTO' },
+  working: { en: 'Working…', it: 'Sto lavorando…' },
+  heard: { en: 'Machine heard', it: 'Il computer ha sentito' },
+  aiGuess: { en: 'AI guess — may be wrong', it: 'Ipotesi AI — può sbagliare' },
+  aiUnsure: { en: 'AI is not sure what was meant', it: "L'AI non è sicura del significato" },
+  confirmed: { en: 'Confirmed by family', it: 'Confermato dalla famiglia' },
+  noTextYet: { en: 'No text yet', it: 'Ancora nessun testo' },
+  asrOff: { en: 'Speech-to-text is off', it: 'Trascrizione disattivata' },
 } as const;
 
 export type StringKey = keyof typeof strings;

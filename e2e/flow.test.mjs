@@ -222,7 +222,6 @@ test('no horizontal overflow and primary targets are large', async () => {
 test('default contacts; keypad with country selector; caregiver renames and changes numbers', async () => {
   const { ctx, page, errors } = await phone();
   for (const n of ['Paul', 'Francesca', 'Izumi', 'Dan']) await btn(page, n).waitFor();
-  assert.equal(await page.getByText('Stefania').count(), 0);
 
   // No number yet → keypad, full screen, no HOME bar
   await btn(page, 'Izumi').click();

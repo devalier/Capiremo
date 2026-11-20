@@ -36,7 +36,7 @@ const base = () =>
   withInterpretations(
     withAsr(messageFromDraft(draft, 'm1', 'saved-on-device'), {
       status: 'done',
-      text: 'Basta problem, Voice working Nation',
+      text: 'example transcript',
       detectedLanguages: ['it', 'en'],
       provider: 'test',
     }),
@@ -105,12 +105,12 @@ describe('message model', () => {
     const ms = [
       mk('a', SPEAKER_ID, 'paul', 1),
       mk('b', 'paul', SPEAKER_ID, 3),
-      mk('c', 'stefania', SPEAKER_ID, 2),
+      mk('c', 'dan', SPEAKER_ID, 2),
       mk('d', 'paul', SPEAKER_ID, 4, true),
     ];
     expect(conversation(ms, 'paul').map((m) => m.id)).toEqual(['d', 'b', 'a']);
     expect(unplayedFrom(ms, 'paul')).toBe(1);
-    expect(unplayedFrom(ms, 'stefania')).toBe(1);
+    expect(unplayedFrom(ms, 'dan')).toBe(1);
   });
 });
 

@@ -20,7 +20,7 @@
 Smallest thing that works for a handful of family members:
 
 - **API:** small authenticated HTTP service (e.g. Node/Hono or Python/FastAPI) behind HTTPS.
-- **Data:** Postgres (or SQLite for a single-family deployment) with the tables in the spec: `users`, `devices`, `contacts`, `messages`, `audio_assets`, `interpretation_candidates`, `verified_corrections`, `personal_vocabulary`.
+- **Data:** Postgres (or SQLite for a single-family deployment) with tables: `users`, `devices`, `contacts`, `messages`, `audio_assets`, `interpretation_candidates`, `verified_corrections`, `personal_vocabulary`.
 - **Audio:** object storage (S3-compatible), encrypted at rest, accessed via short-lived signed URLs; per-contact ACL checked before signing.
 - **Auth:** caregiver-mediated enrollment. Caregiver creates the account and issues a one-time enrollment link/QR; the device receives a long-lived, revocable device token (stored in IndexedDB; rotated on use). No passwords for the speaker. Revocation and lost-phone flow from the caregiver side.
 - **Delivery:** client uploads audio + metadata; server stores, then notifies recipients (Web Push where supported, otherwise polling while open). Client keeps the draft until the server acknowledges (`DeliveryService.deliver` → `delivered`). Outbox with retry on reconnect.
@@ -31,7 +31,7 @@ Smallest thing that works for a handful of family members:
 ## Phase 3/4 — speech pipeline
 
 - ASR: multilingual, language auto-detection allowed to switch mid-utterance (do not pin one locale). Candidates to evaluate against the Phase 0 corpus: Whisper-family models (hosted or self-hosted), cloud ASR with multi-language mode, and audio-capable LLMs as a separate candidate. Pick by measured WER/CER per language and on mixed utterances, plus named-entity and negation preservation.
-- Interpretation: prompt from spec §5.3; input = raw ASR + recent messages' *verified* corrections + confirmed vocabulary only; output 0–2 candidates with uncertainty notes; abstention expected. Hard rule: never flip negation, names, times, quantities, medicine.
+- Interpretation: cautious system prompt (at most two readings, abstain when unsure, no invented content); input = raw ASR + recent messages' *verified* corrections + confirmed vocabulary only; output 0–2 candidates with uncertainty notes; abstention expected. Hard rule: never flip negation, names, times, quantities, medicine.
 - Evaluation: false-confident reconstruction rate is the critical metric.
 
 ## Privacy & consent (decide before real recordings leave the device)

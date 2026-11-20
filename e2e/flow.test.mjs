@@ -54,7 +54,13 @@ const btn = (page, name) => page.getByRole('button', { name, exact: false });
 const key = (page, k) => page.getByRole('button', { name: k, exact: true });
 
 /** Tap a contact; if no number is set yet, enter one on the keypad first. */
+async function goPeople(page) {
+  if (await page.locator('.launch-grid').isVisible()) await page.getByRole('button', { name: 'PEOPLE', exact: true }).click();
+  await page.locator('.screen.people').waitFor();
+}
+
 async function openContact(page, name = 'Paul', digits = '3331234567') {
+  await goPeople(page);
   await btn(page, name).click();
   if (await page.locator('.keypad').isVisible()) {
     for (const d of digits) await key(page, d).click();
@@ -191,7 +197,7 @@ test('caregiver: gate, simulated reply, recipient layers', async () => {
   await page.screenshot({ path: `${SHOTS}caregiver.png`, fullPage: true });
   await btn(page, 'Done').click();
 
-  await page.locator('.tile .badge').first().waitFor();
+  await page.locator('.launch-tile .badge').first().waitFor(); // NEW count on the PEOPLE button
   await page.screenshot({ path: `${SHOTS}home-new.png` });
   await openContact(page);
   await btn(page, 'MESSAGES').click();
@@ -199,12 +205,13 @@ test('caregiver: gate, simulated reply, recipient layers', async () => {
   await btn(page, 'Play: Paul').click();
   await page.waitForTimeout(300);
   await btn(page, 'HOME').click();
-  assert.equal(await page.locator('.tile .badge').count(), 0, 'played message no longer NEW');
+  assert.equal(await page.locator('.launch-tile .badge').count(), 0, 'played message no longer NEW');
   await ctx.close();
 });
 
 test('no horizontal overflow and primary targets are large', async () => {
   const { ctx, page } = await phone();
+  await goPeople(page);
   const tiles = await page.locator('.tile').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
   assert.equal(tiles.length, 4);
   assert.ok(tiles.every((h) => h >= 120), `small tile: ${tiles}`);
@@ -222,6 +229,7 @@ test('no horizontal overflow and primary targets are large', async () => {
 
 test('default contacts; keypad with country selector; caregiver renames and changes numbers', async () => {
   const { ctx, page, errors } = await phone();
+  await goPeople(page);
   for (const n of ['Paul', 'Francesca', 'Izumi', 'Dan']) await btn(page, n).waitFor();
 
   // No number yet → keypad, full screen, no HOME bar
@@ -246,6 +254,7 @@ test('default contacts; keypad with country selector; caregiver renames and chan
 
   // Cancel leaves number unset
   await btn(page, 'HOME').click();
+  await goPeople(page);
   await btn(page, 'Dan').click();
   await page.locator('.keypad').waitFor();
   await btn(page, 'CANCEL').click();
@@ -279,6 +288,7 @@ test('default contacts; keypad with country selector; caregiver renames and chan
   await page.screenshot({ path: `${SHOTS}caregiver-contacts.png`, fullPage: true });
   await btn(page, 'Done').click();
   await page.reload();
+  await goPeople(page);
   assert.equal(await page.locator('.tile').count(), 3);
   assert.equal(await page.getByText('Daniel').count(), 0);
   await page.screenshot({ path: `${SHOTS}home-3.png` });
@@ -337,11 +347,11 @@ async function connectServer(page) {
   await page.getByText('Connected. Speech-to-text: gpt-4o-transcribe. Interpretation: claude-opus-5-5.').waitFor();
 }
 
-test('admin gear is small and does not crowd the four contacts', async () => {
+test('admin gear is small and does not crowd the four home buttons', async () => {
   const { ctx, page } = await phone();
   const gear = await page.getByRole('button', { name: 'Admin', exact: true }).boundingBox();
   assert.ok(gear.width <= 52 && gear.height <= 52 && gear.width >= 44, `gear ${gear.width}x${gear.height}`);
-  const lastTile = await page.locator('.tile').last().boundingBox();
+  const lastTile = await page.locator('.launch-tile').last().boundingBox();
   assert.ok(lastTile.y + lastTile.height <= gear.y + 1, 'gear below tiles');
   assert.ok(gear.y + gear.height <= 844, 'gear visible without scrolling');
   await ctx.close();
@@ -459,5 +469,77 @@ test('train: record phrase, confirm, examples and hints feed later requests; che
   assert.deepEqual(last.examples.map((e) => e.meant).sort(), ['Ciao Paul, come stai?', 'Paul, vieni domenica']);
   assert.deepEqual(last.vocabulary, ['Torino', 'nonna']);
   assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// ---------- Launcher home ----------
+async function captureLaunches(page) {
+  await page.addInitScript(() => {
+    window.__launched = [];
+    window.__capiremoLaunch = (url) => window.__launched.push(url);
+  });
+}
+const launched = (page) => page.evaluate(() => window.__launched);
+
+test('home: four equal buttons fill the screen in the right places', async () => {
+  const { ctx, page } = await phone();
+  const boxes = {};
+  for (const name of ['PEOPLE', 'MAIL', 'Netflix', 'Duolingo']) boxes[name] = await page.getByRole('button', { name, exact: true }).boundingBox();
+  const { PEOPLE: p, MAIL: m, Netflix: n, Duolingo: d } = boxes;
+  assert.ok(p.x < m.x && Math.abs(p.y - m.y) < 2, 'People top-left, Mail top-right');
+  assert.ok(n.x < d.x && Math.abs(n.y - d.y) < 2 && n.y > p.y, 'Netflix bottom-left, Duolingo bottom-right');
+  for (const b of [p, m, n, d]) {
+    assert.ok(Math.abs(b.width - p.width) < 2 && Math.abs(b.height - p.height) < 2, 'equal size');
+    assert.ok(b.width >= 160 && b.height >= 300, `large: ${b.width}x${b.height}`);
+  }
+  await page.screenshot({ path: `${SHOTS}launcher.png` });
+  // People → contacts → HOME returns to the launcher
+  await page.getByRole('button', { name: 'PEOPLE', exact: true }).click();
+  for (const name of ['Paul', 'Francesca', 'Izumi', 'Dan']) await btn(page, name).waitFor();
+  await btn(page, 'HOME').click();
+  await page.locator('.launch-grid').waitFor();
+  await ctx.close();
+});
+
+test('home: Mail, Netflix, Duolingo open their apps; failure is explained', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  await captureLaunches(page);
+  await page.goto(URL);
+  await page.getByRole('button', { name: 'MAIL', exact: true }).click();
+  await page.getByRole('button', { name: 'Netflix', exact: true }).click();
+  await page.getByRole('button', { name: 'Duolingo', exact: true }).click();
+  assert.deepEqual(await launched(page), ['message://', 'nflx://', 'duolingo://']);
+  // Nothing opened (page stayed visible) → explain and offer the website
+  await page.getByText('Could not open Duolingo').waitFor();
+  await page.screenshot({ path: `${SHOTS}launch-failed.png` });
+  await btn(page, 'OPEN WEBSITE').click();
+  assert.equal((await launched(page)).at(-1), 'https://www.duolingo.com/');
+  assert.equal(await page.getByText('Could not open').count(), 0);
+  await ctx.close();
+});
+
+test('admin: caregiver chooses apps and labels for the bottom two buttons', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  await captureLaunches(page);
+  await page.goto(URL);
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  await page.getByLabel('Code').fill('2468');
+  await page.getByLabel('Bottom-left button app').selectOption('youtube');
+  assert.equal(await page.getByLabel('Bottom-left button label').inputValue(), 'YouTube'); // label follows preset
+  await page.getByLabel('Bottom-left button label').fill('Music videos');
+  await page.getByLabel('Bottom-right button app').selectOption('custom');
+  await page.getByLabel('Bottom-right button label').fill('RaiPlay');
+  await page.getByLabel('Bottom-right button link').fill('javascript:alert(1)');
+  await page.getByText('Not a valid app link.').waitFor();
+  await page.getByLabel('Bottom-right button link').fill('https://www.raiplay.it/');
+  await page.screenshot({ path: `${SHOTS}admin-apps.png`, fullPage: true });
+  await btn(page, 'Done').click();
+  await page.reload();
+  await page.getByRole('button', { name: 'Music videos', exact: true }).click();
+  await page.getByRole('button', { name: 'RaiPlay', exact: true }).click();
+  assert.deepEqual(await launched(page), ['youtube://', 'https://www.raiplay.it/']);
+  assert.equal(await page.getByRole('button', { name: 'Netflix', exact: true }).count(), 0);
   await ctx.close();
 });

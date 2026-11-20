@@ -12,7 +12,8 @@ Licence: AGPL-3.0.
 
 | Flow | Notes |
 |---|---|
-| Home → person tile → **TALK** → **STOP** → review → **SEND** | Up to 4 contacts (default: Paul, Francesca, Izumi, Dan). Tap to start, tap to stop. No hold-to-talk, swipes or long-press. |
+| Home | Four equal buttons filling the screen: **PEOPLE** (top-left, the family voice messages below), **MAIL** (top-right, opens Apple Mail via `message://`), and two caregiver-chosen apps (bottom; default **Netflix** `nflx://` and **Duolingo** `duolingo://`). If an app doesn't open within ~2.5 s (not installed), the screen says so and offers the website. HOME always returns here. Admin → *Home buttons* picks the bottom apps from a preset list (YouTube, WhatsApp, Spotify, Prime Video, …) or a custom link, with your own label. URL schemes must be confirmed on the real iPhone. |
+| People → person tile → **TALK** → **STOP** → review → **SEND** | Up to 4 contacts (default: Paul, Francesca, Izumi, Dan). Tap to start, tap to stop. No hold-to-talk, swipes or long-press. |
 | Phone number setup | Tapping a contact with no number opens a full-screen keypad: big 1–9, +, 0 and delete keys, a country selector (flag + dial code; defaults to the phone's region, else Italy) and the number display. Saves in international (E.164) format. Typing **+** first enters a full international number and bypasses the country. Nothing is dialled or sent to the number yet; it is stored for the messaging backend. |
 | Review: **LISTEN**, **SEND**, **RECORD AGAIN**, **CANCEL** | Nothing is ever sent automatically. |
 | Messages → **PLAY** / **TEXT** | Newest first. Big PLAY per message, NEW badge for unplayed replies. **TEXT** (Aa) opens the message's text: *Machine heard* (raw speech-to-text), *AI guess — may be wrong* (0–2 readings, or "AI is not sure"), and *Confirmed by family* if someone verified it — always visually separate. **MAKE TEXT** transcribes on demand. |

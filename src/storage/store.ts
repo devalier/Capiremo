@@ -1,6 +1,7 @@
 // On-device persistence. Interface + IndexedDB implementation + in-memory implementation (tests).
 
 import type { Contact, Draft, Message, TrainingExample } from '../types';
+import { defaultSlots, type AppSlot } from '../apps';
 
 export type LabelLanguage = 'en' | 'it' | 'both';
 
@@ -26,11 +27,13 @@ export interface Settings {
   ai: AiSettings;
   /** Phrases offered in the Train screen; null = built-in defaults. */
   phrases: string[] | null;
+  /** Bottom-left and bottom-right Home buttons (caregiver-chosen apps). */
+  appSlots: [AppSlot, AppSlot];
 }
 
 export const defaultAi: AiSettings = { engine: 'off', serverUrl: '', token: '', interpret: true, deviceModel: 'whisper-base' };
 
-export const defaultSettings: Settings = { labels: 'en', sounds: true, speak: false, forceDemoAudio: false, ai: defaultAi, phrases: null };
+export const defaultSettings: Settings = { labels: 'en', sounds: true, speak: false, forceDemoAudio: false, ai: defaultAi, phrases: null, appSlots: defaultSlots };
 
 const contact = (id: string, name: string, order: number): Contact => ({
   id,

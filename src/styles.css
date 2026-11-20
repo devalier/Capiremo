@@ -455,3 +455,42 @@ button:focus-visible, input:focus-visible, select:focus-visible, label:focus-wit
 .scores td { text-align: right; font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .scores tr + tr { border-top: 1px solid #ddd; }
 details summary { cursor: pointer; min-height: 40px; display: flex; align-items: center; }
+
+/* ---------- Launcher home: four equal buttons filling the screen ---------- */
+.launcher { gap: 12px; }
+.launch-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 14px;
+  min-height: 0;
+}
+.launch-tile {
+  position: relative;
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px;
+  border: 4px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  cursor: pointer;
+  text-align: center;
+}
+.launch-tile.people { background: #dce8ff; }
+.launch-tile.mail { background: #fff4d6; }
+.launch-tile.app0 { background: #ffe1e1; }
+.launch-tile.app1 { background: #dff5e1; }
+.launch-icon { font-size: 64px; line-height: 1; }
+.launch-label { font-size: 28px; font-weight: 800; overflow-wrap: anywhere; display: flex; flex-direction: column; }
+.launch-tile .badge { top: 8px; right: 8px; font-size: 18px; }
+.cg-slot { border: 1px solid #bbb; border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.cg-slot legend { font-weight: 700; padding: 0 4px; }
+@media (max-width: 360px) {
+  .launch-icon { font-size: 52px; }
+  .launch-label { font-size: 24px; }
+}

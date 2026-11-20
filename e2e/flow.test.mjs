@@ -127,6 +127,7 @@ test('cancel needs confirmation and can be undone', async () => {
   await btn(page, 'CANCEL').click();
   await btn(page, 'YES, DELETE').click();
   await btn(page, 'BRING BACK DELETED RECORDING').waitFor();
+  await page.waitForTimeout(300); // let the IndexedDB write commit (a real reload is never this fast)
   await page.reload(); // undo survives reload
   await btn(page, 'BRING BACK DELETED RECORDING').click();
   await page.getByText('Your message to Paul').waitFor();
@@ -174,13 +175,13 @@ test('caregiver: gate, simulated reply, recipient layers', async () => {
   await page.getByText('Sent to Paul').waitFor();
   await btn(page, 'HOME').click();
 
-  await page.getByRole('button', { name: 'Caregiver' }).click();
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
   await page.getByLabel('Code').fill('2468');
   await page.getByText('Machine transcription (raw)').waitFor();
-  await page.getByText('No speech-to-text service is connected').waitFor();
+  await page.getByText('Not transcribed (speech-to-text is off)').waitFor();
   await page.getByText('AI suggestion — unverified guess').waitFor();
   await page.getByPlaceholder('What was actually meant').fill('Hello son');
-  await btn(page, 'Save').click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
   await page.getByText('Confirmed meaning (human-verified)').waitFor();
   await page.getByText('speaker approval: not asked').waitFor();
 
@@ -260,7 +261,7 @@ test('default contacts; keypad with country selector; caregiver renames and chan
   await btn(page, 'HOME').click();
 
   // Caregiver: rename, change number, add/remove capped at 4
-  await page.getByRole('button', { name: 'Caregiver' }).click();
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
   await page.getByLabel('Code').fill('2468');
   assert.equal(await btn(page, '+ Add contact').count(), 0, 'already 4 contacts');
   await page.getByLabel('Name of Dan').fill('Daniel');
@@ -281,6 +282,182 @@ test('default contacts; keypad with country selector; caregiver renames and chan
   assert.equal(await page.locator('.tile').count(), 3);
   assert.equal(await page.getByText('Daniel').count(), 0);
   await page.screenshot({ path: `${SHOTS}home-3.png` });
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// ---------- AI: mocked Capiremo server ----------
+const API = 'https://api.capiremo.test';
+const TOKEN = 'family-token-0123456789';
+
+/** Fake server: records requests; transcription always returns "chow pole come sty". */
+async function mockServer(ctx, { interpretReply } = {}) {
+  const log = { transcribe: [], interpret: [] };
+  await ctx.route(`${API}/**`, async (route) => {
+    const req = route.request();
+    const path = new globalThis.URL(req.url()).pathname;
+    const headers = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
+    if (req.headers().authorization !== `Bearer ${TOKEN}`) return route.fulfill({ status: 401, headers, body: '{"error":"unauthorised"}' });
+    if (path === '/health')
+      return route.fulfill({ headers, body: JSON.stringify({ ok: true, transcribe: true, interpret: true, model: 'claude-opus-5-5', transcribeModel: 'gpt-4o-transcribe' }) });
+    if (path === '/transcribe') {
+      const body = req.postDataBuffer()?.toString('latin1') ?? '';
+      const prompt = /name="prompt"\r\n\r\n([^\r]*)/.exec(body)?.[1] ?? '';
+      log.transcribe.push({ prompt, bytes: body.length });
+      return route.fulfill({ headers, body: JSON.stringify({ text: 'chow pole come sty', language: null, provider: 'openai:gpt-4o-transcribe' }) });
+    }
+    if (path === '/interpret') {
+      const input = JSON.parse(req.postData());
+      log.interpret.push(input);
+      const reply = interpretReply?.(input) ?? {
+        readings: [{ text: 'Ciao Paul, come stai?', uncertainty_notes: ['"sty" could be "stai"'] }],
+        indeterminate: false,
+        note: '',
+      };
+      return route.fulfill({ headers, body: JSON.stringify({ ...reply, model: 'claude-opus-5-5' }) });
+    }
+    return route.fulfill({ status: 404, headers, body: '{}' });
+  });
+  return log;
+}
+
+async function openAdmin(page) {
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  if (await page.getByLabel('Code').isVisible()) await page.getByLabel('Code').fill('2468');
+  await page.getByRole('heading', { name: 'Admin' }).waitFor();
+}
+
+async function connectServer(page) {
+  await openAdmin(page);
+  await page.getByLabel('Speech-to-text engine').selectOption('server');
+  await page.getByLabel('Server address').fill(API);
+  await page.getByLabel('Access token').fill(TOKEN);
+  await btn(page, 'Save server').click();
+  await btn(page, 'Test connection').click();
+  await page.getByText('Connected. Speech-to-text: gpt-4o-transcribe. Interpretation: claude-opus-5-5.').waitFor();
+}
+
+test('admin gear is small and does not crowd the four contacts', async () => {
+  const { ctx, page } = await phone();
+  const gear = await page.getByRole('button', { name: 'Admin', exact: true }).boundingBox();
+  assert.ok(gear.width <= 52 && gear.height <= 52 && gear.width >= 44, `gear ${gear.width}x${gear.height}`);
+  const lastTile = await page.locator('.tile').last().boundingBox();
+  assert.ok(lastTile.y + lastTile.height <= gear.y + 1, 'gear below tiles');
+  assert.ok(gear.y + gear.height <= 844, 'gear visible without scrolling');
+  await ctx.close();
+});
+
+test('message text: machine transcript and AI guess, shown separately', async () => {
+  const { ctx, page, errors } = await phone();
+  const log = await mockServer(ctx);
+  await connectServer(page);
+  await btn(page, 'Done').click();
+
+  await record(page, 1000);
+  await btn(page, 'SEND').click();
+  await page.getByText('Sent to Paul').waitFor();
+  await btn(page, 'MESSAGES').click();
+  await btn(page, 'TEXT: You').click();
+  await page.getByText('Machine heard').waitFor();
+  await page.getByText('chow pole come sty').waitFor();
+  await page.getByText('AI guess — may be wrong').waitFor();
+  await page.getByText('Ciao Paul, come stai?').waitFor();
+  await page.screenshot({ path: `${SHOTS}message-text.png` });
+  assert.equal(log.transcribe.length, 1);
+  assert.match(log.transcribe[0].prompt, /^Paul, Francesca, Izumi, Dan/);
+  assert.ok(log.transcribe[0].bytes > 1000, 'audio uploaded');
+  assert.equal(log.interpret[0].asrText, 'chow pole come sty');
+  assert.deepEqual(log.interpret[0].examples, []);
+
+  // Collapses; PLAY still independent
+  await btn(page, 'HIDE TEXT: You').click();
+  assert.equal(await page.getByText('Machine heard').count(), 0);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('AI abstains → says it is unsure, keeps the raw transcript', async () => {
+  const { ctx, page } = await phone();
+  await mockServer(ctx, { interpretReply: () => ({ readings: [], indeterminate: true, note: 'Too garbled.' }) });
+  await connectServer(page);
+  await btn(page, 'Done').click();
+  await record(page, 800);
+  await btn(page, 'SEND').click();
+  await btn(page, 'MESSAGES').click();
+  await btn(page, 'TEXT: You').click();
+  await page.getByText('AI is not sure what was meant').waitFor();
+  await page.getByText('Too garbled.').waitFor();
+  await page.getByText('chow pole come sty').waitFor();
+  assert.equal(await page.getByText('AI guess — may be wrong').count(), 0);
+  await ctx.close();
+});
+
+test('speech-to-text off: message has no text, offers nothing to transcribe', async () => {
+  const { ctx, page } = await phone();
+  await record(page, 800);
+  await btn(page, 'SEND').click();
+  await btn(page, 'MESSAGES').click();
+  await btn(page, 'TEXT: You').click();
+  await page.getByText('No text yet').waitFor();
+  await page.getByText('Speech-to-text is off').waitFor();
+  assert.equal(await btn(page, 'MAKE TEXT').count(), 0);
+  await ctx.close();
+});
+
+test('train: record phrase, confirm, examples and hints feed later requests; check is leave-one-out', async () => {
+  const { ctx, page, errors } = await phone();
+  const log = await mockServer(ctx);
+  await connectServer(page);
+  await btn(page, 'Train voice').click();
+  await page.getByRole('heading', { name: 'Train' }).waitFor();
+  const phrase = await page.getByTestId('phrase').textContent();
+  assert.equal(phrase, 'Ciao Paul, come stai?');
+
+  for (let i = 0; i < 2; i++) {
+    await btn(page, '● Record').click();
+    await page.waitForTimeout(700);
+    await btn(page, '■ Stop').click();
+    await page.getByTestId('train-heard').waitFor();
+    if (i === 1) {
+      // second recording: correct the prefilled text by hand
+      await page.getByPlaceholder('Type exactly what was said').fill('Paul, vieni domenica');
+    }
+    await btn(page, 'Save as confirmed').click();
+  }
+  await page.getByText('Saved recordings (2)').waitFor();
+  await page.getByLabel('Vocabulary').fill('Torino\nnonna');
+  await btn(page, 'Save words').click();
+  await page.screenshot({ path: `${SHOTS}train.png`, fullPage: true });
+
+  // Improvement check: each recording is evaluated without its own example
+  const before = log.interpret.length;
+  await btn(page, 'Run check').click();
+  await page.getByText('Checked 2 recordings.').waitFor();
+  const checks = log.interpret.slice(before);
+  assert.equal(checks.length, 2);
+  for (const c of checks) assert.equal(c.examples.length, 1, 'leave-one-out');
+  const checkPrompts = log.transcribe.slice(-2).map((t) => t.prompt);
+  assert.ok(checkPrompts.every((p) => p.includes('Torino, nonna')), 'vocabulary hint');
+  assert.ok(checkPrompts.some((p) => !p.includes('Paul, vieni domenica')), 'own sentence excluded from hint');
+  assert.notEqual(await page.getByTestId('score-raw').textContent(), '—');
+  assert.notEqual(await page.getByTestId('score-ai').textContent(), '—');
+  await page.screenshot({ path: `${SHOTS}train-check.png`, fullPage: true });
+
+  // Training persists and is used for real messages
+  await page.goto(URL);
+  await openContact(page);
+  await btn(page, 'TALK').click();
+  await page.getByText('Recording…').waitFor();
+  await page.waitForTimeout(600);
+  await btn(page, 'STOP').click();
+  await btn(page, 'SEND').click();
+  await btn(page, 'MESSAGES').click();
+  await btn(page, 'TEXT: You').click();
+  await page.getByText('Ciao Paul, come stai?').first().waitFor();
+  const last = log.interpret.at(-1);
+  assert.equal(last.examples.length, 2);
+  assert.deepEqual(last.examples.map((e) => e.meant).sort(), ['Ciao Paul, come stai?', 'Paul, vieni domenica']);
+  assert.deepEqual(last.vocabulary, ['Torino', 'nonna']);
   assert.deepEqual(errors, []);
   await ctx.close();
 });

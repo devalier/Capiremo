@@ -17,6 +17,7 @@ import { newId } from '../state/useTalkFlow';
 import type { Contact, Message } from '../types';
 import { MAX_CONTACTS, SPEAKER_ID } from '../types';
 import { formatE164 } from '../phone';
+import { AiSettings } from './AiSettings';
 
 interface Props {
   contacts: Contact[];
@@ -24,7 +25,9 @@ interface Props {
   settings: Settings;
   playing: string | null;
   persistent: boolean | null;
-  services: { asr: string; interpreter: string; delivery: string; remote: boolean };
+  services: { delivery: string; remote: boolean };
+  trainingCount: number;
+  onTrain: () => void;
   onPlay: (m: Message) => void;
   onSettings: (s: Settings) => void;
   onContacts: (c: Contact[]) => void;
@@ -44,7 +47,7 @@ export function Caregiver(p: Props) {
   if (!p.unlocked) {
     return (
       <main className="screen caregiver gate">
-        <h1>Caregiver area</h1>
+        <h1>Admin</h1>
         <p>
           Type <strong>{GATE_CODE}</strong> to continue. This only prevents accidental entry; it is not a password.
         </p>
@@ -68,17 +71,24 @@ export function Caregiver(p: Props) {
   return (
     <main className="screen caregiver">
       <div className="cg-head">
-        <h1>Caregiver</h1>
+        <h1>Admin</h1>
         <button type="button" className="cg-btn" onClick={p.onClose}>
           Done
         </button>
       </div>
 
+      <button type="button" className="cg-train" onClick={p.onTrain}>
+        <span className="cg-train-title">🎙 Train voice</span>
+        <span className="cg-dim">{p.trainingCount} confirmed recording{p.trainingCount === 1 ? '' : 's'}</span>
+      </button>
+
+      <Section title="AI (speech-to-text and interpretation)">
+        <AiSettings ai={p.settings.ai} onChange={(ai) => p.onSettings({ ...p.settings, ai })} />
+      </Section>
+
       <Section title="Status">
         <ul className="cg-facts">
           <li>Microphone API: {micSupported() ? 'available' : 'not available (demo sound only)'}</li>
-          <li>Speech-to-text: {p.services.asr === 'none' ? 'not connected' : p.services.asr}</li>
-          <li>AI suggestions: {p.services.interpreter === 'none' ? 'not connected' : p.services.interpreter}</li>
           <li>Delivery: {p.services.remote ? p.services.delivery : 'this device only (no server yet)'}</li>
           <li>
             Persistent storage:{' '}
@@ -183,7 +193,11 @@ function RecipientList({ contacts, messages, playing, onPlay, onMessage }: Props
                   <q>{m.asr.text}</q>
                 ) : (
                   <span className="cg-dim">
-                    {m.asr.status === 'unavailable' || m.asr.status === 'failed' ? m.asr.reason : m.asr.status}
+                    {m.asr.status === 'unavailable' || m.asr.status === 'failed'
+                      ? m.asr.reason
+                      : m.asr.status === 'pending'
+                        ? 'Transcribing…'
+                        : 'Not transcribed (speech-to-text is off)'}
                   </span>
                 )}
               </div>

@@ -8,6 +8,19 @@
 4. **Learning only from verified, consented corrections.** `learningExamples()` is the only exit; corrections default to `usableForLearning: false` and `speakerApproved: null`.
 5. **Mocks are honest.** The prototype's ASR reports "not connected", the interpreter abstains, delivery reports "saved on this device". Nothing claims success it didn't achieve.
 
+## Speech pipeline (built)
+
+```
+record → SEND (audio saved/delivered first)
+       → speech-to-text: off | server (OpenAI, vocabulary hint) | device (Whisper/transformers.js)
+       → interpretation (speaker's messages only): Claude via proxy, 0–2 readings or abstain
+       → stored as separate layers: asr / interpretations (unverified) / verified
+```
+
+- Proxy (`server/`, Cloudflare Worker): `APP_TOKEN` bearer auth, CORS allow-list, keys as Worker secrets, no storage or logging of content. Claude call uses structured output, `effort: medium`, prompt caching, and server-side refusal fallback.
+- Training: confirmed recordings (`training` store) + consented message corrections → `learning.ts` builds (a) the speech-to-text hint (names, vocabulary, frequently missed words, confirmed sentences; ≤900 chars) and (b) up to 30 most recent heard→said examples for Claude. Evaluation is leave-one-out word accuracy on up to 15 recent recordings.
+- Not done: fine-tuning or per-speaker acoustic models; the hint prompt and few-shot examples are the only adaptation.
+
 ## Current (Phase 1)
 
 - React + TypeScript + Vite PWA, no router, no state library. Single high-contrast theme.

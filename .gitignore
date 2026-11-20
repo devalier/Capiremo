@@ -3,3 +3,7 @@ dist/
 *.tsbuildinfo
 .DS_Store
 e2e/artifacts/
+public/ort/
+server/node_modules/
+server/.dev.vars
+server/.wrangler/

@@ -83,4 +83,20 @@ export interface Message {
   interpretationFeedback: Record<number, InterpretationFeedback>;
   verified: VerifiedCorrection | null;
   playedByRecipient: boolean;
+  /** Outcome of the AI interpretation step (absent on older messages). */
+  ai?: { status: 'pending' | 'done' | 'abstained' | 'failed'; note: string; model: string | null };
+}
+
+/** A recording made in the Train screen, with what a human confirmed was actually said. */
+export interface TrainingExample {
+  id: string;
+  createdAt: number;
+  audio: AudioClip;
+  mode: 'phrase' | 'free';
+  /** Human-confirmed wording. Only confirmed examples are stored. */
+  confirmedText: string;
+  /** Raw recogniser output at the time of recording (may be absent if speech-to-text was off). */
+  asr: AsrResult;
+  /** Result of the last improvement check, if one was run. */
+  lastCheck?: { at: number; rawAccuracy: number; aiAccuracy: number | null; aiText: string | null; asrText: string };
 }
